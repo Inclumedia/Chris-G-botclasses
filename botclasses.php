@@ -51,6 +51,7 @@ class http {
     public $postfollowredirs;
     public $getfollowredirs;
     public $quiet=false;
+    public $userAgent = 'php wikibot classes';
 
 	public function http_code () {
 		return curl_getinfo( $this->ch, CURLINFO_HTTP_CODE );
@@ -84,7 +85,7 @@ class http {
         //echo 'POST: '.$url."\n";
         $time = microtime(1);
         curl_setopt($this->ch,CURLOPT_URL,$url);
-        curl_setopt($this->ch,CURLOPT_USERAGENT,'php wikibot classes');
+        curl_setopt($this->ch,CURLOPT_USERAGENT,$this->userAgent);
         /* Crappy hack to add extra cookies, should be cleaned up */
         $cookies = null;
         foreach ($this->cookie_jar as $name => $value) {
@@ -121,7 +122,7 @@ class http {
         //echo 'GET: '.$url."\n";
         $time = microtime(1);
         curl_setopt($this->ch,CURLOPT_URL,$url);
-        curl_setopt($this->ch,CURLOPT_USERAGENT,'php wikibot classes');
+        curl_setopt($this->ch,CURLOPT_USERAGENT,$this->userAgent);
         /* Crappy hack to add extra cookies, should be cleaned up */
         $cookies = null;
         foreach ($this->cookie_jar as $name => $value) {
