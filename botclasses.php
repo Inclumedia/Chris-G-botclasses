@@ -52,6 +52,8 @@ class http {
     public $getfollowredirs;
     public $quiet=false;
     public $userAgent = 'php wikibot classes';
+    public $httpHeader = array( 'Expect:' );
+    public $defaultHttpHeader = array( 'Expect:' );
 
 	public function http_code () {
 		return curl_getinfo( $this->ch, CURLINFO_HTTP_CODE );
@@ -81,7 +83,7 @@ class http {
         $this->cookie_jar = array();
     }
 
-    function post ($url,$data) {
+    function post( $url, $data ) {
         //echo 'POST: '.$url."\n";
         $time = microtime(1);
         curl_setopt($this->ch,CURLOPT_URL,$url);
@@ -98,7 +100,10 @@ class http {
             curl_setopt($this->ch,CURLOPT_COOKIE,$cookies);
         curl_setopt($this->ch,CURLOPT_FOLLOWLOCATION,$this->postfollowredirs);
         curl_setopt($this->ch,CURLOPT_MAXREDIRS,10);
-        curl_setopt($this->ch, CURLOPT_HTTPHEADER, array('Expect:'));
+	curl_setopt( $this->ch, CURLOPT_HTTPHEADER, $this->httpHeader );
+        #curl_setopt($this->ch, CURLOPT_HTTPHEADER, array('Expect:'));
+        #curl_setopt($this->ch, CURLOPT_HTTPHEADER,
+	#    'Content-Type: application/x-www-form-urlencoded' );
         curl_setopt($this->ch,CURLOPT_RETURNTRANSFER,1);
         curl_setopt($this->ch,CURLOPT_TIMEOUT,30);
         curl_setopt($this->ch,CURLOPT_CONNECTTIMEOUT,10);
@@ -112,13 +117,17 @@ class http {
 //	global $logfd;
 //	if (!is_resource($logfd)) {
 //		$logfd = fopen('php://stderr','w');
-	if (!$this->quiet)
+	if (!$this->quiet) {
             echo 'POST: '.$url.' ('.(microtime(1) - $time).' s) ('.strlen($data)." b)\n";
+	}
+	if ($this->quiet == 'soft') {
+	    echo 'POST: ('.(microtime(1) - $time).' s) ('.strlen($data)." b)\n";
+	}
 // 	}
         return $data;
     }
 
-    function get ($url) {
+    function get ( $url ) {
         //echo 'GET: '.$url."\n";
         $time = microtime(1);
         curl_setopt($this->ch,CURLOPT_URL,$url);
@@ -147,8 +156,12 @@ class http {
         //global $logfd;
         //if (!is_resource($logfd)) {
         //    $logfd = fopen('php://stderr','w');
-        if (!$this->quiet)
+        if (!$this->quiet) {
             echo 'GET: '.$url.' ('.(microtime(1) - $time).' s) ('.strlen($data)." b)\n";
+        }
+	if (!$this->quiet == 'soft' ) {
+            echo 'GET: ('.(microtime(1) - $time).' s) ('.strlen($data)." b)\n";
+        }
         //}
         return $data;
     }
@@ -173,6 +186,7 @@ class wikipedia {
     private $token;
     private $ecTimestamp;
     public $url;
+    public $echoRet = false; // For debugging unserialize errors
 
     /**
      * This is our constructor.
@@ -198,25 +212,55 @@ class wikipedia {
     }
 
     /**
+     * Changes the user agent.
+     * @param $userAgent The user agent string.
+     **/
+    function setUserAgent ( $userAgent ) {
+	$this->http->userAgent = $userAgent;
+    }
+    
+    /**
+     * Changes the http header.
+     * @param $httpHeader The http header.
+     **/
+    function setHttpHeader ( $httpHeader ) {
+	$this->http->httpHeader = $httpHeader;
+    }
+
+    /**
+     * Changes the http header.
+     * @param $httpHeader The http header.
+     **/
+    function useDefaultHttpHeader () {
+	$this->http->httpHeader = $this->http->defaultHttpHeader;
+    }
+
+    /**
      * Sends a query to the api.
      * @param $query The query string.
      * @param $post POST data if its a post request (optional).
      * @return The api result.
      **/
-    function query ($query,$post=null,$repeat=0) {
+    function query ($query, $post=null, $repeat=0) {
         if ($post==null) {
             $ret = $this->http->get($this->url.$query);
         } else {
             $ret = $this->http->post($this->url.$query,$post);
         }
-		if ($this->http->http_code() != "200") {
-			if ($repeat < 10) {
-				return $this->query($query,$post,++$repeat);
-			} else {
-				throw new Exception("HTTP Error.");
-			}
+	if ($this->http->http_code() != "200") {
+		if ($repeat < 10) {
+			return $this->query($query,$post,++$repeat);
+		} else {
+			throw new Exception("HTTP Error " . $this->http->http_code() );
 		}
-        return unserialize($ret);
+	}
+	if( $this->echoRet ) {
+	    if( @unserialize( $ret ) === false ) {
+		return array( 'errors' => array(
+		    "The API query result can't be unserialized. Raw text is as follows: $ret\n" ) );
+	    }
+	}
+        return unserialize( $ret );
     }
 
     /**
@@ -764,22 +808,27 @@ class wikipedia {
      * Uploads an image.
      * @param $page The destination file name.
      * @param $file The local file path.
-     * @param $desc The upload discrption (defaults to '').
+     * @param $desc The upload description (defaults to '').
      **/
-     function upload ($page,$file,$desc='') {
+     function upload ( $page, $file, $desc='' ) {
+	if ( !file_exists( $file ) ) {
+	    return array( 'errors' => array(
+		    "File does not exist!" ) );
+	}
         if ($this->token == null) {
                 $this->token = $this->getedittoken();
         }
+
         $params = array(
                 'filename'        => $page,
                 'comment'         => $desc,
                 'text'            => $desc,
                 'token'           => $this->token,
                 'ignorewarnings'  => '1',
-                'file'            => '@'.$file
+                'file'            => '@' . $file
         );
-        return $this->query('?action=upload&format=php',$params);
-     }
+        return $this->query( '?action=upload&format=php', $params );
+    }
     
     /*
     $page - page
